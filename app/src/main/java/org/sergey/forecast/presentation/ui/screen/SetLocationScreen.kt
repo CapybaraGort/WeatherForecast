@@ -2,21 +2,27 @@ package org.sergey.forecast.presentation.ui.screen
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.util.Log
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -24,26 +30,33 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.google.android.gms.location.LocationServices
 import com.google.android.gms.location.Priority
+import org.sergey.forecast.R
 import org.sergey.forecast.presentation.viewmodel.SetLocationViewModel
 
 @Composable
 fun SetLocationScreen(
-    onNext: () -> Unit = {},
-    viewModel: SetLocationViewModel = hiltViewModel()
+    viewModel: SetLocationViewModel = hiltViewModel(),
+    navToNearbyStations: (Double, Double, Int) -> Unit
 ) {
     val context = LocalContext.current
-    val latitude by viewModel.latitude.collectAsStateWithLifecycle()
-    val longitude by viewModel.longitude.collectAsStateWithLifecycle()
+    val latitudeInput by viewModel.latitudeInput.collectAsStateWithLifecycle()
+    val longitudeInput by viewModel.longitudeInput.collectAsStateWithLifecycle()
+
     val radiusMeters by viewModel.radiusMeters.collectAsStateWithLifecycle()
     val radiusOptions: List<Int> = listOf(1000, 2500, 5000, 10000)
 
@@ -51,13 +64,22 @@ fun SetLocationScreen(
 
     fun fetchLocation() {
         try {
-            locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
-                .addOnSuccessListener { location ->
-                    location?.let {
-                        viewModel.setLatitude(it.latitude)
-                        viewModel.setLongitude(it.longitude)
-                    }
+            locationClient.lastLocation.addOnSuccessListener { location ->
+                if (location != null) {
+                    viewModel.setLatitudeInput(location.latitude.toString())
+                    viewModel.setLongitudeInput(location.longitude.toString())
+                } else {
+                    locationClient.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, null)
+                        .addOnSuccessListener { fresh ->
+                            if(fresh == null)
+                                Toast.makeText(context, "Включите местоположение", Toast.LENGTH_SHORT).show()
+                            else {
+                                viewModel.setLatitudeInput(fresh.latitude.toString())
+                                viewModel.setLongitudeInput(fresh.longitude.toString())
+                            }
+                        }
                 }
+            }
         } catch (_: SecurityException) {}
     }
 
@@ -83,11 +105,23 @@ fun SetLocationScreen(
         }
     }
 
-    val latValid = latitude in -90.0..90.0
-    val lonValid = longitude in -180.0..180.0
-
     Scaffold(
-
+        modifier = Modifier.imePadding(),
+        floatingActionButton = {
+            IconButton(
+                modifier = Modifier.size(64.dp),
+                colors = IconButtonDefaults.iconButtonColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ),
+                onClick = { requestLocation() }
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.location),
+                    contentDescription = "locate me"
+                )
+            }
+        }
     ) { innerPadding ->
         Column(
             modifier = Modifier
@@ -97,32 +131,29 @@ fun SetLocationScreen(
                 .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text("Местоположение")
-            Button(
-                onClick = { requestLocation() },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Определить местоположение")
-            }
             OutlinedTextField(
-                value = latitude.toString(),
-                onValueChange = { viewModel.setLatitude(it.toDoubleOrNull()) },
+                value = latitudeInput,
+                onValueChange = {
+                    viewModel.setLatitudeInput(it)
+                                },
                 label = { Text("Широта") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                isError = !latValid
+                isError = !viewModel.latValid
             )
             OutlinedTextField(
-                value = longitude.toString(),
-                onValueChange = { viewModel.setLongitude(it.toDoubleOrNull()) },
+                value = longitudeInput,
+                onValueChange = {
+                    viewModel.setLongitudeInput(it)
+                                },
                 label = { Text("Долгота") },
                 modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-                isError = !lonValid
+                isError = !viewModel.lonValid
             )
-            Text("Радиус поиска метеостанций (км)")
+            Text("Радиус поиска метеостанций")
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -144,15 +175,17 @@ fun SetLocationScreen(
                         onClick = { viewModel.setRadiusMeters(meters)},
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("${meters / 100} км")
+                        Text("${meters / 1000} км", textAlign = TextAlign.Center)
                     }
                 }
             }
-            Spacer(modifier = Modifier.height(24.dp))
             Button(
-                onClick = onNext,
+                onClick = {
+                    navToNearbyStations(viewModel.latitude ?: 0.0, viewModel.longitude ?: 0.0, radiusMeters)
+                },
                 modifier = Modifier.fillMaxWidth(),
-                enabled = latValid && lonValid
+                enabled = latitudeInput.isNotEmpty() && longitudeInput.isNotEmpty()
+                        && viewModel.latValid && viewModel.lonValid
             ) {
                 Text("Далее")
             }

@@ -2,7 +2,8 @@ package org.sergey.forecast.domain.repository
 
 import org.sergey.forecast.domain.entity.Station
 
-interface MeteostatRepository {
+interface StationRepository {
+
     suspend fun getNearbyStations(
         lat: Double,
         lon: Double,

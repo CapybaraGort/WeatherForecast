@@ -1,4 +1,4 @@
-package org.sergey.forecast.data.remote.responce
+package org.sergey.forecast.data.remote.response
 
 import org.sergey.forecast.data.remote.dto.StationDto
 

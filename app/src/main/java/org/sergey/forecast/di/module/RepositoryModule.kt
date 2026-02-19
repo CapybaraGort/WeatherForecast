@@ -4,8 +4,10 @@ import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
-import org.sergey.forecast.data.repository.MeteostatRepositoryImpl
-import org.sergey.forecast.domain.repository.MeteostatRepository
+import org.sergey.forecast.data.repository.StationRepositoryImpl
+import org.sergey.forecast.data.repository.WeatherRepositoryImpl
+import org.sergey.forecast.domain.repository.StationRepository
+import org.sergey.forecast.domain.repository.WeatherRepository
 import javax.inject.Singleton
 
 @Module
@@ -14,7 +16,13 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindMeteostatRepository(
-        impl: MeteostatRepositoryImpl
-    ): MeteostatRepository
+    abstract fun bindWeatherRepository(
+        impl: WeatherRepositoryImpl
+    ): WeatherRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindStationRepository(
+        impl: StationRepositoryImpl
+    ): StationRepository
 }
