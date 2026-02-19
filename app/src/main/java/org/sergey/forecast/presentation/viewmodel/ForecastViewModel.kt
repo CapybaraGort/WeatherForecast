@@ -1,9 +1,11 @@
 package org.sergey.forecast.presentation.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -29,13 +31,15 @@ class ForecastViewModel @Inject constructor(
     private val formatter = DateTimeFormatter.ISO_LOCAL_DATE
     private var stationId: String = ""
     private var dailyCacheJob: Job? = null
+    private var metaCacheJob: Job? = null
 
     private val _uiState = MutableStateFlow(ForecastUiState())
-    val uiState: StateFlow<ForecastUiState> = _uiState.asStateFlow()
+    val uiState: StateFlow<ForecastUiState> = _uiState
+        .asStateFlow()
         .onStart {
             loadStationMeta()
-            observeStationMetaCache()
-        }.stateIn(viewModelScope, SharingStarted.Lazily, ForecastUiState())
+        }
+        .stateIn(viewModelScope, SharingStarted.Lazily, ForecastUiState())
 
 
     fun setStationId(id: String) {
@@ -52,34 +56,35 @@ class ForecastViewModel @Inject constructor(
         }
     }
 
-    private fun observeStationMetaCache() {
-        viewModelScope.launch {
+    fun loadStationMeta() {
+        if (stationId.isEmpty()) return
+
+        metaCacheJob?.cancel()
+        _uiState.update { it.copy(stationMetaState = UiState.Loading) }
+
+        metaCacheJob = viewModelScope.launch {
             repository.getStationMetaCache(stationId)
                 .catch { }
                 .collect { meta ->
-                    if (_uiState.value.stationMetaState !is UiState.Success) {
-                        meta?.let {
-                            _uiState.update { state ->
-                                state.copy(stationMetaState = UiState.Success(it))
-                            }
-                        }
+                    if (meta != null) {
+                        _uiState.update { it.copy(stationMetaState = UiState.Success(meta)) }
                     }
                 }
         }
-    }
-
-    fun loadStationMeta() {
-        if (stationId.isEmpty()) return
         viewModelScope.launch {
-            _uiState.update { it.copy(stationMetaState = UiState.Loading) }
+            delay(50)
             val result = repository.fetchStationMeta(stationId)
+            metaCacheJob?.cancel()
             _uiState.update {
                 result.fold(
                     onSuccess = { data ->
                         if (data != null) it.copy(stationMetaState = UiState.Success(data))
                         else it.copy(stationMetaState = UiState.Error("Нет данных"))
                     },
-                    onFailure = { _ -> it.copy(stationMetaState = UiState.Error("Нет соединения")) }
+                    onFailure = { _ ->
+                        if (it.stationMetaState is UiState.Success) it
+                        else it.copy(stationMetaState = UiState.Error("Нет соединения"))
+                    }
                 )
             }
         }
@@ -113,19 +118,20 @@ class ForecastViewModel @Inject constructor(
                     val merged = mergeDailyDataWithRange(cached, start, end)
                     if (merged.isNotEmpty()) {
                         _uiState.update { it.copy(dailyUiState = UiState.Success(merged)) }
+                    } else {
+                        _uiState.update { it.copy(dailyUiState = UiState.Success(emptyList())) }
                     }
                 }
         }
 
         viewModelScope.launch {
+            delay(50)
             val result = repository.getDailyWeather(stationId, start, end)
             dailyCacheJob?.cancel()
             _uiState.update {
                 result.fold(
                     onSuccess = { data ->
-                        if(data.isNotEmpty())
-                            it.copy(dailyUiState = UiState.Success(mergeDailyDataWithRange(data, start, end)))
-                        else it
+                        it.copy(dailyUiState = UiState.Success(mergeDailyDataWithRange(data, start, end)))
                     },
                     onFailure = { _ ->
                         if (it.dailyUiState is UiState.Success) it

@@ -255,20 +255,29 @@ private fun DateRangeSection(
 ) {
     var showDateRangePicker by remember { mutableStateOf(false) }
 
+    val now = remember {
+        Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+    }
+    val earliest = remember {
+        Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+            add(Calendar.YEAR, -9)
+            set(Calendar.DAY_OF_MONTH, 1)
+        }
+    }
     val dateRangePickerState = rememberDateRangePickerState(
         initialDisplayedMonthMillis = System.currentTimeMillis(),
         selectableDates = object : SelectableDates {
             override fun isSelectableDate(utcTimeMillis: Long): Boolean {
-                val calendarNow = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
-                val calendarDate = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
+                val date = Calendar.getInstance(TimeZone.getTimeZone("UTC")).apply {
                     timeInMillis = utcTimeMillis
                 }
-                return calendarDate.get(Calendar.MONTH) == calendarNow.get(Calendar.MONTH) &&
-                        calendarDate.get(Calendar.YEAR) == calendarNow.get(Calendar.YEAR)
+
+                return !date.before(earliest) && !date.after(now)
             }
 
             override fun isSelectableYear(year: Int): Boolean {
-                return year == Calendar.getInstance().get(Calendar.YEAR)
+                val currentYear = Calendar.getInstance().get(Calendar.YEAR)
+                return year >= currentYear - 9 && year <= currentYear
             }
         }
     )
@@ -444,7 +453,7 @@ private fun DailyWeatherCard(day: DailyWeather) {
                 Column {
                     Text(text = dateOnly, fontWeight = FontWeight.Medium)
                     Spacer(modifier = Modifier.height(4.dp))
-                    Text(text = "Осадки: ${day.prcp ?: 0.0} мм", style = MaterialTheme.typography.bodySmall)
+                    Text(text = "Осадки: ${day.prcp ?: "-"} мм", style = MaterialTheme.typography.bodySmall)
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text(text = "Средняя: ${day.tavg?.toInt() ?: "-"}°")
