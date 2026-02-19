@@ -13,6 +13,8 @@ interface WeatherRepository {
 
     suspend fun getDailyWeather(
         stationId: String,
+        lat: Double,
+        lon: Double,
         start: String,
         end: String
     ): Result<List<DailyWeather>>

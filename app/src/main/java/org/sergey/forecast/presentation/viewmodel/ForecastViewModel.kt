@@ -33,6 +33,10 @@ class ForecastViewModel @Inject constructor(
     private var dailyCacheJob: Job? = null
     private var metaCacheJob: Job? = null
 
+    private var stationLatitude = 0.0
+    private var stationLongitude = 0.0
+
+
     private val _uiState = MutableStateFlow(ForecastUiState())
     val uiState: StateFlow<ForecastUiState> = _uiState
         .asStateFlow()
@@ -67,6 +71,8 @@ class ForecastViewModel @Inject constructor(
                 .catch { }
                 .collect { meta ->
                     if (meta != null) {
+                        stationLatitude = meta.latitude ?: 0.0
+                        stationLongitude = meta.longitude ?: 0.0
                         _uiState.update { it.copy(stationMetaState = UiState.Success(meta)) }
                     }
                 }
@@ -78,7 +84,11 @@ class ForecastViewModel @Inject constructor(
             _uiState.update {
                 result.fold(
                     onSuccess = { data ->
-                        if (data != null) it.copy(stationMetaState = UiState.Success(data))
+                        if (data != null) {
+                            stationLatitude = data.latitude ?: 0.0
+                            stationLongitude = data.longitude ?: 0.0
+                            it.copy(stationMetaState = UiState.Success(data))
+                        }
                         else it.copy(stationMetaState = UiState.Error("Нет данных"))
                     },
                     onFailure = { _ ->
@@ -126,7 +136,7 @@ class ForecastViewModel @Inject constructor(
 
         viewModelScope.launch {
             delay(50)
-            val result = repository.getDailyWeather(stationId, start, end)
+            val result = repository.getDailyWeather(stationId, stationLatitude, stationLongitude, start, end)
             dailyCacheJob?.cancel()
             _uiState.update {
                 result.fold(

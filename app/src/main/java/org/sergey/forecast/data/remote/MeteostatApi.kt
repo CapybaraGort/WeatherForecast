@@ -19,9 +19,10 @@ interface MeteostatApi {
     @GET("stations/meta")
     suspend fun getStationMeta(@Query("id") id: String): StationMetaResponse
 
-    @GET("stations/daily")
+    @GET("point/daily")
     suspend fun getDailyWeather(
-        @Query("station") stationId: String,
+        @Query("lat") lat: Double,
+        @Query("lon") lon: Double,
         @Query("start") start: String,
         @Query("end") end: String,
     ): DailyWeatherResponse

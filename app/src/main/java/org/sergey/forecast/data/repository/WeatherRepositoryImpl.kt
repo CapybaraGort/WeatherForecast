@@ -46,11 +46,13 @@ class WeatherRepositoryImpl @Inject constructor(
 
     override suspend fun getDailyWeather(
         stationId: String,
+        lat: Double,
+        lon: Double,
         start: String,
         end: String
     ): Result<List<DailyWeather>> {
         return try {
-            val response = api.getDailyWeather(stationId, start, end)
+            val response = api.getDailyWeather(lat, lon, start, end)
             val data = response.data?.map { it.toDomain() } ?: emptyList()
             if (data.isNotEmpty()) {
                 dailyWeatherCacheDao.upsertAll(data.map { it.toEntity(stationId) })
